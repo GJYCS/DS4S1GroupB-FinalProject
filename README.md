@@ -1,2 +1,2 @@
-# DS4S1_GroupB_Final_Project_Code
+# DS4SIGroupB-FinalProject
 Code for DS4SI Group B's final project
