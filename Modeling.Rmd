@@ -1,0 +1,369 @@
+---
+title: "Modeling"
+author: "Jiayu Gu & Yu Ran"
+date: "12/5/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls(all=TRUE))
+options("contrasts")
+options(contrasts = c("contr.helmert", "contr.poly"))
+
+library(tidyverse)
+library(openxlsx)
+library(car)
+library(haven)
+library(olsrr)
+library(psych)
+library(multcomp) 
+library(scales)
+library(gridExtra)
+library(psych)
+
+filter <- dplyr::filter
+select <- dplyr::select
+alpha <- psych::alpha
+```
+
+
+```{r}
+#################
+### Load data ###
+#################
+data <- read_sav("The Curve Not Taken_data.sav")
+data <- as_tibble(as.data.frame(data)) %>% filter(treatment != '')
+```
+
+
+```{r}
+alpha(data[,c('HelAtti3', 'HelAtti4',
+              'ExpertPer4', 'ExpertPer5',
+              'polAtti2.9', 'polAtti2.8')])
+
+alpha(data[,c('PolBias6','PolBias7', 'PolBias8')])
+```
+
+
+```{r}
+#################
+# Data cleaning #
+#################
+data$treatment <- as.factor(data$treatment)
+data$factcheck <- as.factor(data$factcheck)
+data$defense <- as.factor(data$defense)
+data$racism <- as.factor(data$racism)
+data$polParty <- as.factor(data$polParty)
+
+mydata <- data %>% 
+  mutate(healthExpertProfessionalism = 
+           (PolBias6 + PolBias7 + PolBias8)/3,
+         TestAndTrace3 = (HelAtti3 + HelAtti4 + 
+                            ExpertPer4 + ExpertPer5 + 
+                            polAtti2.8 + polAtti2.9)/6) %>%
+   
+
+  select(treatment, factcheck, 
+         defense, racism, polParty, 
+         Compa1, Compa3, Compa8,
+         TestAndTrace3, Crespon2,
+         healthExpertProfessionalism, 
+         ResponseId,
+         age,
+         gender,
+         edu)
+```
+We have added three variables: "age", "gender", and "edu". 
+I would like to test if they have any contribution to our hypotheses.
+
+```{r}
+# Cook's distance function for removing outliers
+cook.fuc <- function (model, data) {
+cooksd <- cooks.distance(model)
+threshold <- 4/(dim(data)[1])
+outlier <- which(cooksd > threshold)
+}
+```
+
+
+```{r}
+#############################
+# New model1:testing & tracing(add gender variable)
+# Hypothesis: Exposure to international policy comparison news will increase knowledge of policy differences between the two countries.
+#############################
+data$gender <- as.factor(data$gender)
+
+model1_1.data <- mydata %>% 
+  drop_na(treatment, factcheck, 
+          defense, racism, 
+          polParty,TestAndTrace3,gender)
+
+model1_1 <- lm(TestAndTrace3~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * gender,
+                    data = model1_1.data)
+
+# Cook's distance for removing outliers
+model1_1.outlier <- cook.fuc(model1_1, model1_1.data)
+model1_2.data <- model1_1.data[-model1_1.outlier,]
+
+model1_2 <- lm(TestAndTrace3 ~ treatment+
+                factcheck + defense + 
+                racism + polParty +  
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * gender,
+                data = model1_2.data)
+
+model1_2.result <- Anova(model1_2, type = 3)
+model1_2.result
+myrecord.treat <- c('Control', 'Outcome', 'Policy')
+myrecode.party <- c('Republicans', 'Democrats', 'Independents')
+re.edu <- c('','','','','HighSchool', 'Somecollege', ' 4yearcollege','Graduate')
+re<-c('Male','Female','other')
+attach(model1_2.data)
+interaction.plot(myrecord.treat[treatment],gender,TestAndTrace3,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters))
+ 
+```
+
+
+
+```{r}
+#############################
+# New model2: Trust in health experts (add "gender" variable)
+# Hypothesis: Exposure to international policy comparison news will increase trust in health experts.
+#############################
+
+model2_1.data <- mydata %>% 
+  drop_na(treatment, factcheck, 
+          defense, racism, 
+          polParty, healthExpertProfessionalism, gender)
+
+model2_1 <- lm(healthExpertProfessionalism ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * gender,
+                    data = model2_1.data)
+
+# Cook's distance for removing outliers
+model2_1.outlier <- cook.fuc(model2_1, model2_1.data)
+model2_2.data <- model2_1.data[-model2_1.outlier,]
+
+model2_2 <- lm(healthExpertProfessionalism ~ treatment +gender+
+                factcheck + defense + 
+                racism + polParty +  
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * gender,
+                    data = model2_2.data)
+
+model2_2.result <- Anova(model2_2, type = 3)
+model2_2.result
+attach(model2_2.data )
+interaction.plot(myrecord.treat[treatment],gender,healthExpertProfessionalism,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters)) 
+```
+
+```{r}
+#############################
+# New model3: Trust in health experts (add "edu" variable)
+# Hypothesis: Exposure to international policy comparison news will increase trust in health experts.
+#############################
+data$edu <- as.factor(data$edu)
+
+model3_1.data <- mydata %>% 
+  drop_na(treatment, factcheck, 
+          defense, racism, 
+          polParty, healthExpertProfessionalism, edu)%>%
+   filter(edu==5|edu==6|edu==7|edu==8)  
+
+model3_1 <- lm(healthExpertProfessionalism ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * edu,
+                    data = model3_1.data)
+
+# Cook's distance for removing outliers
+model3_1.outlier <- cook.fuc(model3_1, model3_1.data)
+model3_2.data <- model3_1.data[-model3_1.outlier,]
+
+model3_2 <- lm(healthExpertProfessionalism ~ treatment + 
+                factcheck + defense + 
+                racism + polParty +  
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * edu,
+                    data = model3_2.data)
+
+model3_2.result <- Anova(model3_2, type = 3)
+model3_2.result
+ 
+attach(model3_2.data )
+interaction.plot(myrecord.treat[treatment],re.edu[edu],healthExpertProfessionalism,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters)) 
+ 
+```
+
+```{r}
+#############################
+# New model4: Presidential Blame (add "edu" variable)
+# Hypothesis: Exposure to international policy comparison news will increase presidential blame for the severity of the U.S. COVID-19 crisis
+#############################
+
+model4_1.data <- mydata %>% 
+  drop_na(treatment, factcheck, 
+          defense, racism, 
+          polParty, Crespon2, edu,TestAndTrace3)%>%
+   filter(edu==5|edu==6|edu==7|edu==8)  
+
+model4_1 <- lm(Crespon2 ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * edu, 
+              data = model4_1.data)
+
+# Cook's distance for removing outliers
+model4_1.outlier <- cook.fuc(model4_1, model4_1.data)
+model4_2.data <- model4_1.data[-model4_1.outlier,]
+
+model4_2 <- lm(Crespon2 ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * edu, 
+              data = model4_2.data)
+
+model4_2.result <- Anova(model4_2, type = 3)
+model4_2.result
+model42.aov <- aov(Crespon2 ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * edu,
+                data = model4_2.data)
+
+ 
+ 
+attach(model4_2.data)
+ 
+aov1<-aov(Crespon2~edu*treatment)
+summary(aov1)
+```
+
+
+```{r}
+#############################
+# New model5: TestAndTrace3 (add "age" variable)
+# Hypothesis: Exposure to international policy comparison news will increase knowledge of policy differences between the two countries.
+#############################
+
+model5_1.data <- mydata %>% 
+  drop_na(treatment, factcheck, 
+          defense, racism, 
+          polParty, Crespon2,edu,healthExpertProfessionalism)%>%
+   filter(edu==5|edu==6|edu==7|edu==8) 
+
+model5_1 <- lm(healthExpertProfessionalism ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * age, 
+              data = model5_1.data)
+
+# Cook's distance for removing outliers
+model5_1.outlier <- cook.fuc(model5_1, model5_1.data)
+model5_2.data <- model5_1.data[-model5_1.outlier,]
+
+model5_2 <- aov(healthExpertProfessionalism ~ treatment + 
+                factcheck + defense + 
+                racism + polParty + 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * age, 
+              data = model5_2.data)
+
+model5_2.result <- Anova(model5_2, type = 3)
+model5_2.result
+model52.aov <- aov(healthExpertProfessionalism~ treatment + 
+                factcheck + defense + 
+                racism + polParty +edu+ 
+                treatment * factcheck + 
+                treatment * defense + 
+                treatment * racism + 
+                treatment * polParty +
+                treatment * age,
+              data = model5_2.data)
+
+attach(model5_2.data) 
+ 
+```
+Above are the five new models.
+
+```{r}
+#Graphs
+
+par(mfrow=c(2,2))
+attach(model1_2.data )
+interaction.plot(myrecord.treat[treatment],re[gender],TestAndTrace3,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters))
+attach(model2_2.data )
+interaction.plot(myrecord.treat[treatment],re[gender],healthExpertProfessionalism,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters))
+attach(model3_2.data )
+interaction.plot(myrecord.treat[treatment],re.edu[edu],healthExpertProfessionalism,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters))
+attach(model4_2.data )
+interaction.plot(myrecord.treat[treatment],re.edu[edu],Crespon2,
+                 type = c("l", "p", "b", "o", "c"),
+                 col = c('red','orange','green','blue'), 
+                 pch = c(3:7, 0, letters)) 
+```
